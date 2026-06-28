@@ -6,7 +6,7 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const TICKET_CHANNEL_PREFIX = "ticket-";
-const TICKET_CATEGORY_NAME = ╭ tickets ╮;
+const TICKET_CATEGORY_NAME = "📋 tickets";
 
 // ─── PRODUCT KNOWLEDGE BASE ───────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ Disable all antiviruses on your computer, and also completely disable Windows De
 Disable Windows Defender (https://www.sordum.org/9480/defender-control-v2-1/)
 If you have problems with launching/injection, then you need to download this file. Run the file and restart your PC, then try to run the cheat again. You should also disable kernel isolation and vulnerable driver blocking in Windows Defender.
 To run the cheat, you must also disable Reputation-based Protection.
-Open the start(windows) menu and search for “Reputation-Based Protection.” Open this window.
+Open the start(windows) menu and search for "Reputation-Based Protection." Open this window.
 
 In the window that opens, disable all options.
 Also, if you have problems with cheat injection or other problems during the game (ESP lags, etc.), then try switching the screen mode to "Borderless / Windowed)" in the game settings.
