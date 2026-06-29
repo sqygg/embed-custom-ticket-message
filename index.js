@@ -253,6 +253,7 @@ discord.on("messageCreate", async (message) => {
     await channel.send(reply);
   } catch (err) {
     console.error("Error handling follow-up message:", err);
+    await message.channel.send("❌ Something went wrong: " + err.message);
   }
 });
 
