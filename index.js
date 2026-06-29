@@ -7,7 +7,7 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const TICKET_CHANNEL_PREFIX = "ticket-";
-const TICKET_CATEGORY_NAME = "╭ tickets ╮"; 
+const TICKET_CATEGORY_NAME = "╭ tickets ╮"; // must match your Discord category name exactly
 
 // ─── PRODUCT KNOWLEDGE BASE ───────────────────────────────────────────────────
 
@@ -256,9 +256,17 @@ discord.on("messageCreate", async (message) => {
   }
 });
 
-discord.once("ready", () => {
-  console.log(`✅ Bot is online as ${discord.user.tag}`);
+discord.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName === "ping") {
+    await interaction.reply("Pong! 🏓");
+  }
+});
+
+discord.once("clientReady", async (client) => {
+  console.log(`✅ Bot is online as ${client.user.tag}`);
   fetchExodus();
+  await client.application.commands.create({ name: "ping", description: "Pong!" });
 });
 
 discord.login(DISCORD_TOKEN);
