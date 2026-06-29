@@ -7,7 +7,7 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const TICKET_CHANNEL_PREFIX = "ticket-";
-const TICKET_CATEGORY_NAME = "📋 tickets"; // must match your Discord category name exactly
+const TICKET_CATEGORY_NAME = "╭ tickets ╮"; 
 
 // ─── PRODUCT KNOWLEDGE BASE ───────────────────────────────────────────────────
 
