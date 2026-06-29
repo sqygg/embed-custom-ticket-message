@@ -1,3 +1,4 @@
+require("dotenv").config();
 const { Client, GatewayIntentBits, ChannelType } = require("discord.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -6,14 +7,12 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const TICKET_CHANNEL_PREFIX = "ticket-";
-const TICKET_CATEGORY_NAME = "📋 tickets";
+const TICKET_CATEGORY_NAME = "📋 tickets"; // must match your Discord category name exactly
 
 // ─── PRODUCT KNOWLEDGE BASE ───────────────────────────────────────────────────
 
-// Exodus: fetched automatically from your website
 const EXODUS_URL = "https://m0gged.mysellauth.com/blog";
 
-// Crusader: paste your product guide below
 const CRUSADER_KNOWLEDGE = `
 How to download and run Crusader correctly?
 Step-by-step instructions for running the software:
@@ -31,55 +30,47 @@ After pressing Insert, you need to wait a little for the injection to complete.
 The cheat menu will appear in front of you. The key to close/open the menu is Insert.
 If you plan to use Crusader with a spoofer, always run the cheat loader first, and then the spoofer.
 
-Common problems and solutions.
-Here we have collected popular problems and ways to fix them:
+Common problems and solutions:
 
-Uninstall Faceit anti-cheat and Riot Vanguard using "Add or Remove Programs". Anti-cheats prevent cheats from working;
+Uninstall Faceit anti-cheat and Riot Vanguard using "Add or Remove Programs". Anti-cheats prevent cheats from working.
 Disable all antiviruses on your computer, and also completely disable Windows Defender (Real-time Protection).
 Disable Windows Defender (https://www.sordum.org/9480/defender-control-v2-1/)
-If you have problems with launching/injection, then you need to download this file. Run the file and restart your PC, then try to run the cheat again. You should also disable kernel isolation and vulnerable driver blocking in Windows Defender.
+If you have problems with launching/injection, download this file. Run the file and restart your PC, then try to run the cheat again. You should also disable kernel isolation and vulnerable driver blocking in Windows Defender.
 To run the cheat, you must also disable Reputation-based Protection.
-Open the start(windows) menu and search for "Reputation-Based Protection." Open this window.
-
-In the window that opens, disable all options.
-Also, if you have problems with cheat injection or other problems during the game (ESP lags, etc.), then try switching the screen mode to "Borderless / Windowed)" in the game settings.
-https://mega.nz/file/uURS0ZgL#gn9i_rBW__80V9uzexA_Cr2vPUPNGQK2aif4qtevXHs 
-
+Open the start(windows) menu and search for "Reputation-Based Protection." Open this window and disable all options.
+If you have problems with cheat injection or other problems during the game (ESP lags, etc.), try switching the screen mode to "Borderless / Windowed" in the game settings.
+https://mega.nz/file/uURS0ZgL#gn9i_rBW__80V9uzexA_Cr2vPUPNGQK2aif4qtevXHs
 `;
 
-// Vega: paste your product guide below
 const VEGA_KNOWLEDGE = `
-Common Error Fixes 
+Common Error Fixes:
+
 - Menu Not Showing
 Disable Windows Exploit Protection:
-Windows Security -> App & Browser Control ->
-Exploit Protection -> Turn OFF 
+Windows Security -> App & Browser Control -> Exploit Protection -> Turn OFF
+
 - Loader Crashes / Won't Start
 Run CMD as Administrator and type:
 DISM /Online /Cleanup-Image /ScanHealth
-DISM /Online /Cleanup-Image /RestoreHealth sfc / scannow
-Requires restart afterwards 
+DISM /Online /Cleanup-Image /RestoreHealth
+sfc /scannow
+Requires restart afterwards.
+
 - DLL Error on Startup
 Install Visual C++ 2015 x64 Redistributable: https://www.microsoft.com/en-us/download/details.aspx?id=48145
--Loader Keeps Asking to Restart
-Common causes:
-Multiple Windows installs
-Broken / duplicate EFI partition
-Rare laptop firmware issue
-Fixes:
-Unplug other Windows drives
-Delete extra EFI partition (advancec
-Reinstall Windows
+
+- Loader Keeps Asking to Restart
+Common causes: Multiple Windows installs, Broken/duplicate EFI partition, Rare laptop firmware issue.
+Fixes: Unplug other Windows drives, Delete extra EFI partition, Reinstall Windows.
+
 - BSOD (Blue Screen Of Death)
-If BSODs occur, re-check:
-Hyper-V / VBS disabled
-No antivirus or anticheat running
-System meets requirements
-- Failed to load map memory = ask if he has at least 16gb ram
-and if yes tell him to disable every startup apps
+Re-check: Hyper-V / VBS disabled, No antivirus or anticheat running, System meets requirements.
+
+- Failed to load map memory
+Ask if the user has at least 16GB RAM. If yes, tell them to disable every startup app.
 `;
 
-// -----------------------------------------------------
+// ─── DISCORD + GEMINI SETUP ───────────────────────────────────────────────────
 
 const discord = new Client({
   intents: [
@@ -92,9 +83,9 @@ const discord = new Client({
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// Cache Exodus website content so we don't fetch it on every single message
+// Cache Exodus website content
 let exodusCache = { content: null, fetchedAt: null };
-const CACHE_TTL_MS = 30 * 60 * 1000; // refresh every 30 minutes
+const CACHE_TTL_MS = 30 * 60 * 1000;
 
 async function fetchExodus() {
   const now = Date.now();
@@ -105,14 +96,13 @@ async function fetchExodus() {
     console.log("🌐 Fetching Exodus guide from website...");
     const res = await fetch(EXODUS_URL);
     const html = await res.text();
-    // Strip HTML tags to get plain text
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .slice(0, 20000); // limit to 20k chars
+      .slice(0, 20000);
     exodusCache = { content: text, fetchedAt: now };
     console.log("✅ Exodus guide fetched successfully");
     return text;
@@ -141,7 +131,6 @@ async function buildSystemPrompt(product) {
   } else if (product === "vega") {
     knowledgeSection = `VEGA PRODUCT GUIDE:\n${VEGA_KNOWLEDGE}`;
   } else {
-    // No product detected — load all knowledge
     const exodusContent = await fetchExodus();
     knowledgeSection = `
 EXODUS PRODUCT GUIDE (fetched from website):
@@ -167,7 +156,6 @@ ${knowledgeSection}`;
 }
 
 function isOwnerUnavailable() {
-  // Greece timezone (Europe/Athens) — automatically handles EET/EEST daylight saving
   const hour = parseInt(
     new Intl.DateTimeFormat("en-GB", {
       timeZone: "Europe/Athens",
@@ -184,15 +172,26 @@ const UNAVAILABLE_MSG =
 
 function isTicketChannel(channel) {
   if (channel.type !== ChannelType.GuildText) return false;
-  if (TICKET_CHANNEL_PREFIX && !channel.name.startsWith(TICKET_CHANNEL_PREFIX)) return false;
-  if (TICKET_CATEGORY_NAME &&
-    channel.parent?.name?.toLowerCase() !== TICKET_CATEGORY_NAME.toLowerCase()) return false;
+  if (!channel.name.startsWith(TICKET_CHANNEL_PREFIX)) return false;
+
+  // Log the parent category so you can verify it matches
+  console.log(`📂 Channel parent category: "${channel.parent?.name}"`);
+
+  // Only enforce category check if TICKET_CATEGORY_NAME is set
+  if (
+    TICKET_CATEGORY_NAME &&
+    channel.parent?.name?.toLowerCase() !== TICKET_CATEGORY_NAME.toLowerCase()
+  ) {
+    console.log(`⚠️  Skipping #${channel.name} — category doesn't match. Expected: "${TICKET_CATEGORY_NAME}", Got: "${channel.parent?.name}"`);
+    return false;
+  }
+
   return true;
 }
 
 async function askGemini(systemPrompt, history, newMessage) {
   const chat = model.startChat({
-    history: history.map(m => ({
+    history: history.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
@@ -202,55 +201,42 @@ async function askGemini(systemPrompt, history, newMessage) {
   return result.response.text();
 }
 
-// Fires when Ticket King creates a new ticket channel
+// ─── EVENTS ───────────────────────────────────────────────────────────────────
+
+const WELCOME_MSG =
+  "👋 Hey! Welcome to support. Please describe your issue and mention which product you're using (**Exodus**, **Crusader**, or **Vega**) and I'll help you right away!";
+
 discord.on("channelCreate", async (channel) => {
   try {
     if (!isTicketChannel(channel)) return;
     console.log(`🎫 New ticket channel: #${channel.name}`);
 
+    // Wait for Ticket King to finish setting up the channel
     await new Promise((r) => setTimeout(r, 2000));
 
-    const messages = await channel.messages.fetch({ limit: 10 });
-    const openingContent = messages
-      .filter((m) => m.author.id !== discord.user.id)
-      .map((m) => m.content)
-      .reverse()
-      .join("\n");
-
-    const product = detectProduct(openingContent);
-    const systemPrompt = await buildSystemPrompt(product);
-
-    const userMessage = openingContent
-      ? `A new support ticket has been opened. Ticket content:\n\n${openingContent}\n\nPlease greet the customer and answer their question.`
-      : "A new support ticket has been opened. Please greet the customer and let them know you're here to help.";
-
-    // Send unavailability notice if it's between 00:00 and 10:00 Greece time
     if (isOwnerUnavailable()) {
       await channel.send(UNAVAILABLE_MSG);
     }
 
-    await channel.sendTyping();
-    const reply = await askGemini(systemPrompt, [], userMessage);
-    await channel.send(reply);
-    console.log(`✉️  Replied to #${channel.name} (product: ${product || "unknown"})`);
+    await channel.send(WELCOME_MSG);
+    console.log(`✉️  Welcomed #${channel.name}`);
   } catch (err) {
     console.error("Error handling ticket channel:", err);
   }
 });
 
-// Respond to follow-up messages in ticket channels
 discord.on("messageCreate", async (message) => {
   try {
     if (message.author.bot) return;
     if (!isTicketChannel(message.channel)) return;
 
     const channel = message.channel;
+    console.log(`💬 Follow-up in #${channel.name}: ${message.content}`);
 
     const history = await channel.messages.fetch({ limit: 20 });
     const sorted = [...history.values()].reverse();
 
-    // Detect product from full conversation
-    const fullText = sorted.map(m => m.content).join(" ");
+    const fullText = sorted.map((m) => m.content).join(" ");
     const product = detectProduct(fullText);
     const systemPrompt = await buildSystemPrompt(product);
 
@@ -272,7 +258,6 @@ discord.on("messageCreate", async (message) => {
 
 discord.once("ready", () => {
   console.log(`✅ Bot is online as ${discord.user.tag}`);
-  // Pre-fetch Exodus on startup
   fetchExodus();
 });
 
