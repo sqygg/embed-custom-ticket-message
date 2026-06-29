@@ -195,7 +195,10 @@ async function askGemini(systemPrompt, history, newMessage) {
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
-    systemInstruction: systemPrompt,
+    systemInstruction: {
+      role: "system",
+      parts: [{ text: systemPrompt }],
+    },
   });
   const result = await chat.sendMessage(newMessage);
   return result.response.text();
