@@ -1,14 +1,14 @@
 {
   "name": "discord-ticket-ai-bot",
   "version": "1.0.0",
-  "description": "AI-powered Discord ticket bot using Gemini + discord.js",
+  "description": "AI-powered Discord ticket bot using Groq + discord.js",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "@google/generative-ai": "^0.15.0",
+    "groq-sdk": "^0.9.0",
     "dotenv": "^16.0.0"
   }
 }
