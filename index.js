@@ -1,10 +1,10 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, ChannelType } = require("discord.js");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const TICKET_CHANNEL_PREFIX = "ticket-";
 const TICKET_CATEGORY_NAME = "╭ tickets ╮"; // must match your Discord category name exactly
@@ -80,8 +80,7 @@ const discord = new Client({
   ],
 });
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+const groq = new Groq({ apiKey: GROQ_API_KEY });
 
 // Cache Exodus website content
 let exodusCache = { content: null, fetchedAt: null };
@@ -189,19 +188,18 @@ function isTicketChannel(channel) {
   return true;
 }
 
-async function askGemini(systemPrompt, history, newMessage) {
-  const chat = model.startChat({
-    history: history.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    })),
-    systemInstruction: {
-      role: "system",
-      parts: [{ text: systemPrompt }],
-    },
+async function askGroq(systemPrompt, history, newMessage) {
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...history.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
+    { role: "user", content: newMessage },
+  ];
+  const result = await groq.chat.completions.create({
+    model: "llama-3.1-8b-instant",
+    messages,
+    max_tokens: 1000,
   });
-  const result = await chat.sendMessage(newMessage);
-  return result.response.text();
+  return result.choices[0].message.content;
 }
 
 // ─── EVENTS ───────────────────────────────────────────────────────────────────
@@ -249,10 +247,15 @@ discord.on("messageCreate", async (message) => {
       .map((m) => ({
         role: m.author.id === discord.user.id ? "assistant" : "user",
         content: m.content,
-      }));
+      }))
+      .filter((_, i, arr) => {
+        // Ensure history starts with a user message
+        const firstUserIdx = arr.findIndex(m => m.role === "user");
+        return i >= firstUserIdx;
+      });
 
     await channel.sendTyping();
-    const reply = await askGemini(systemPrompt, chatHistory, message.content);
+    const reply = await askGroq(systemPrompt, chatHistory, message.content);
     await channel.send(reply);
   } catch (err) {
     console.error("Error handling follow-up message:", err);
