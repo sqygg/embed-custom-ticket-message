@@ -188,18 +188,26 @@ function isTicketChannel(channel) {
   return true;
 }
 
-async function askGroq(systemPrompt, history, newMessage) {
+async function askGroq(systemPrompt, history, newMessage, retries = 3) {
   const messages = [
     { role: "system", content: systemPrompt },
     ...history.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
     { role: "user", content: newMessage },
   ];
-  const result = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages,
-    max_tokens: 1000,
-  });
-  return result.choices[0].message.content;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const result = await groq.chat.completions.create({
+        model: "llama-3.1-8b-instant",
+        messages,
+        max_tokens: 1000,
+      });
+      return result.choices[0].message.content;
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      console.log(`Groq attempt ${i + 1} failed, retrying...`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
 }
 
 // ─── EVENTS ───────────────────────────────────────────────────────────────────
