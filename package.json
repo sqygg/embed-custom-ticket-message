@@ -1,14 +1,13 @@
 {
-  "name": "discord-ticket-ai-bot",
+  "name": "discord-ticket-bot",
   "version": "1.0.0",
-  "description": "AI-powered Discord ticket bot using Groq + discord.js",
+  "description": "Discord ticket bot with guide commands",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "groq-sdk": "^0.9.0",
     "dotenv": "^16.0.0"
   }
 }
