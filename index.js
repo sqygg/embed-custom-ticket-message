@@ -115,10 +115,10 @@ discord.on("interactionCreate", async (interaction) => {
   // /ping — admin only
   if (interaction.commandName === "ping") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
       return;
     }
-    await interaction.reply({ content: "Pong! 🏓", ephemeral: true });
+    await interaction.reply({ content: "Pong! 🏓", ephemeral: false });
   }
 
   // ── GUIDE COMMANDS ──────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ discord.on("interactionCreate", async (interaction) => {
     const guides = loadFile(GUIDES_FILE);
 
     if (!guides[product]) {
-      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: true });
+      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: false });
       return;
     }
 
@@ -144,7 +144,7 @@ discord.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "guidecreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
       return;
     }
 
@@ -167,7 +167,7 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
     console.log(`📝 Guide saved for: ${product}`);
   }
 
@@ -176,7 +176,7 @@ discord.on("interactionCreate", async (interaction) => {
     const list = Object.keys(guides);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: true });
+      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: false });
       return;
     }
 
@@ -185,7 +185,7 @@ discord.on("interactionCreate", async (interaction) => {
       .setColor(0x00ffff)
       .setDescription(list.map((p) => `• **${p}** — ${guides[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
   }
 
   // ── HELP COMMANDS ───────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ discord.on("interactionCreate", async (interaction) => {
     const helps = loadFile(HELP_FILE);
 
     if (!helps[product]) {
-      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: true });
+      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: false });
       return;
     }
 
@@ -211,7 +211,7 @@ discord.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "helpcreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
       return;
     }
 
@@ -234,7 +234,7 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
     console.log(`🆘 Help saved for: ${product}`);
   }
 
@@ -243,7 +243,7 @@ discord.on("interactionCreate", async (interaction) => {
     const list = Object.keys(helps);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: true });
+      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: false });
       return;
     }
 
@@ -252,7 +252,7 @@ discord.on("interactionCreate", async (interaction) => {
       .setColor(0xff4444)
       .setDescription(list.map((p) => `• **${p}** — ${helps[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
   }
 });
 
