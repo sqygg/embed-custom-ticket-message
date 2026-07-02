@@ -10,6 +10,10 @@ const ADMIN_ROLE_NAME = process.env.ADMIN_ROLE || "Admin";
 
 const TICKET_CHANNEL_PREFIX = "ticket-";
 const TICKET_CATEGORY_NAME = "╭ tickets ╮";
+const REVIEW_CHANNEL_ID = "1518902652380123238";
+
+// Map to track who opened each ticket: channelId -> { userId, channelName }
+const ticketOpeners = new Map();
 const GUIDES_FILE = path.join(__dirname, "guides.json");
 const HELP_FILE = path.join(__dirname, "help.json");
 
@@ -46,6 +50,7 @@ const discord = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages,
   ],
 });
 
@@ -73,6 +78,23 @@ discord.on("channelCreate", async (channel) => {
     console.log(`🎫 New ticket: #${channel.name}`);
 
     await new Promise((r) => setTimeout(r, 2000));
+
+    // Find the ticket opener from Ticket King's ping
+    try {
+      const messages = await channel.messages.fetch({ limit: 10 });
+      for (const msg of messages.values()) {
+        if (msg.mentions.users.size > 0) {
+          const opener = msg.mentions.users.find((u) => !u.bot);
+          if (opener) {
+            ticketOpeners.set(channel.id, { userId: opener.id, channelName: channel.name });
+            console.log(`👤 Ticket opener saved: ${opener.tag} for #${channel.name}`);
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Could not fetch opener:", err.message);
+    }
 
     const online = isOwnerOnline();
     const guides = loadFile(GUIDES_FILE);
@@ -115,10 +137,10 @@ discord.on("interactionCreate", async (interaction) => {
   // /ping — admin only
   if (interaction.commandName === "ping") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
       return;
     }
-    await interaction.reply({ content: "Pong! 🏓", ephemeral: false });
+    await interaction.reply({ content: "Pong! 🏓", ephemeral: true });
   }
 
   // ── GUIDE COMMANDS ──────────────────────────────────────────────────────────
@@ -128,7 +150,7 @@ discord.on("interactionCreate", async (interaction) => {
     const guides = loadFile(GUIDES_FILE);
 
     if (!guides[product]) {
-      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: false });
+      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: true });
       return;
     }
 
@@ -144,7 +166,7 @@ discord.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "guidecreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
       return;
     }
 
@@ -167,7 +189,7 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed], ephemeral: true });
     console.log(`📝 Guide saved for: ${product}`);
   }
 
@@ -176,7 +198,7 @@ discord.on("interactionCreate", async (interaction) => {
     const list = Object.keys(guides);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: false });
+      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: true });
       return;
     }
 
@@ -185,7 +207,7 @@ discord.on("interactionCreate", async (interaction) => {
       .setColor(0x00ffff)
       .setDescription(list.map((p) => `• **${p}** — ${guides[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
   // ── HELP COMMANDS ───────────────────────────────────────────────────────────
@@ -195,7 +217,7 @@ discord.on("interactionCreate", async (interaction) => {
     const helps = loadFile(HELP_FILE);
 
     if (!helps[product]) {
-      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: false });
+      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: true });
       return;
     }
 
@@ -211,7 +233,7 @@ discord.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "helpcreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
       return;
     }
 
@@ -234,7 +256,7 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed], ephemeral: true });
     console.log(`🆘 Help saved for: ${product}`);
   }
 
@@ -243,7 +265,7 @@ discord.on("interactionCreate", async (interaction) => {
     const list = Object.keys(helps);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: false });
+      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: true });
       return;
     }
 
@@ -252,7 +274,83 @@ discord.on("interactionCreate", async (interaction) => {
       .setColor(0xff4444)
       .setDescription(list.map((p) => `• **${p}** — ${helps[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+});
+
+// ─── TICKET CLOSE → DM REVIEW ────────────────────────────────────────────────
+discord.on("channelDelete", async (channel) => {
+  try {
+    if (!ticketOpeners.has(channel.id)) return;
+    const { userId, channelName } = ticketOpeners.get(channel.id);
+    ticketOpeners.delete(channel.id);
+
+    const user = await discord.users.fetch(userId);
+    await user.send(
+      `👋 Hey! Your ticket **#${channelName}** has been closed.\n\nWe'd love your feedback! How would you rate the support you received?\n\nPlease reply with a number from **1 to 5** ⭐`
+    );
+    console.log(`📨 Review DM sent to ${user.tag}`);
+
+    // Store pending review — waiting for rating first
+    pendingReviews.set(userId, { channelName, timestamp: Date.now(), stage: "waiting_rating" });
+  } catch (err) {
+    console.error("Error sending review DM:", err.message);
+  }
+});
+
+// Map to track pending reviews: userId -> { channelName, rating, timestamp, stage }
+// stage: "waiting_rating" or "waiting_comment"
+const pendingReviews = new Map();
+
+// Listen for DM replies with rating
+discord.on("messageCreate", async (message) => {
+  if (!message.author.bot && message.channel.type === ChannelType.DM) {
+    if (!pendingReviews.has(message.author.id)) return;
+
+    const { channelName, awaitingComment, rating: savedRating } = pendingReviews.get(message.author.id);
+
+    // Step 2: user is sending their comment
+    if (awaitingComment) {
+      const comment = message.content.trim().toLowerCase() === "skip" ? null : message.content.trim();
+      pendingReviews.delete(message.author.id);
+
+      const stars = "⭐".repeat(savedRating) + "✩".repeat(5 - savedRating);
+
+      const embed = new EmbedBuilder()
+        .setTitle("📝 New Support Review")
+        .setColor(savedRating >= 4 ? 0x00ff88 : savedRating === 3 ? 0xffaa00 : 0xff4444)
+        .addFields(
+          { name: "User", value: `<@${message.author.id}>`, inline: true },
+          { name: "Ticket", value: `#${channelName}`, inline: true },
+          { name: "Rating", value: `${stars} (${savedRating}/5)`, inline: false }
+        )
+        .setTimestamp();
+
+      if (comment) {
+        embed.addFields({ name: "Comment", value: comment });
+      }
+
+      try {
+        const reviewChannel = await discord.channels.fetch(REVIEW_CHANNEL_ID);
+        await reviewChannel.send({ embeds: [embed] });
+        await message.reply("Thanks for your feedback! 🙏");
+        console.log(`⭐ Review received: ${savedRating}/5 from ${message.author.tag}`);
+      } catch (err) {
+        console.error("Could not send review embed:", err.message);
+      }
+      return;
+    }
+
+    // Step 1: user is sending their rating
+    const rating = parseInt(message.content.trim());
+    if (isNaN(rating) || rating < 1 || rating > 5) {
+      await message.reply("Please reply with a number between **1 and 5** ⭐");
+      return;
+    }
+
+    // Save rating and ask for comment
+    pendingReviews.set(message.author.id, { channelName, rating, awaitingComment: true, timestamp: Date.now() });
+    await message.reply("Got it! Would you like to leave a comment? Type it below or reply with **skip** to finish. 💬");
   }
 });
 
