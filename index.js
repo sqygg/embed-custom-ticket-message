@@ -1,160 +1,34 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, ChannelType } = require("discord.js");
-const Groq = require("groq-sdk");
+const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, SlashCommandBuilder, REST, Routes, PermissionFlagsBits } = require("discord.js");
+const fs = require("fs");
+const path = require("path");
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const CLIENT_ID = process.env.CLIENT_ID;
+const ADMIN_ROLE_NAME = process.env.ADMIN_ROLE || "Admin";
 
 const TICKET_CHANNEL_PREFIX = "ticket-";
-const TICKET_CATEGORY_NAME = "╭ tickets ╮"; // must match your Discord category name exactly
+const TICKET_CATEGORY_NAME = "╭ tickets ╮";
+const GUIDES_FILE = path.join(__dirname, "guides.json");
+const HELP_FILE = path.join(__dirname, "help.json");
 
-// ─── PRODUCT KNOWLEDGE BASE ───────────────────────────────────────────────────
-
-const EXODUS_URL = "https://m0gged.mysellauth.com/blog";
-
-const CRUSADER_KNOWLEDGE = `
-How to download and run Crusader correctly?
-Step-by-step instructions for running the software:
-
-After successful payment, you will receive a key to activate access to the cheat, a link to this page, and a link to the loader.
-Download the cheat loader from the link you received with the key.
-Extract the files from the archive and place them in a separate folder. The folder name should be written in English letters, it is recommended to place this folder in the root of the C drive.
-Run the cheat loader as administrator.
-Insert your key into the "Serial Key" field and click "Sign In".
-After a short loading, you will see the R6S icon. 
-Click the "Start Injection Process" button.
-The message "Please Open Rainbow Six Siege" will appear, it's time to launch the game!
-When the game starts, press the "Insert" key while in the main menu.
-After pressing Insert, you need to wait a little for the injection to complete.
-The cheat menu will appear in front of you. The key to close/open the menu is Insert.
-If you plan to use Crusader with a spoofer, always run the cheat loader first, and then the spoofer.
-
-Common problems and solutions:
-
-Uninstall Faceit anti-cheat and Riot Vanguard using "Add or Remove Programs". Anti-cheats prevent cheats from working.
-Disable all antiviruses on your computer, and also completely disable Windows Defender (Real-time Protection).
-Disable Windows Defender (https://www.sordum.org/9480/defender-control-v2-1/)
-If you have problems with launching/injection, download this file. Run the file and restart your PC, then try to run the cheat again. You should also disable kernel isolation and vulnerable driver blocking in Windows Defender.
-To run the cheat, you must also disable Reputation-based Protection.
-Open the start(windows) menu and search for "Reputation-Based Protection." Open this window and disable all options.
-If you have problems with cheat injection or other problems during the game (ESP lags, etc.), try switching the screen mode to "Borderless / Windowed" in the game settings.
-https://mega.nz/file/uURS0ZgL#gn9i_rBW__80V9uzexA_Cr2vPUPNGQK2aif4qtevXHs
-`;
-
-const VEGA_KNOWLEDGE = `
-Common Error Fixes:
-
-- Menu Not Showing
-Disable Windows Exploit Protection:
-Windows Security -> App & Browser Control -> Exploit Protection -> Turn OFF
-
-- Loader Crashes / Won't Start
-Run CMD as Administrator and type:
-DISM /Online /Cleanup-Image /ScanHealth
-DISM /Online /Cleanup-Image /RestoreHealth
-sfc /scannow
-Requires restart afterwards.
-
-- DLL Error on Startup
-Install Visual C++ 2015 x64 Redistributable: https://www.microsoft.com/en-us/download/details.aspx?id=48145
-
-- Loader Keeps Asking to Restart
-Common causes: Multiple Windows installs, Broken/duplicate EFI partition, Rare laptop firmware issue.
-Fixes: Unplug other Windows drives, Delete extra EFI partition, Reinstall Windows.
-
-- BSOD (Blue Screen Of Death)
-Re-check: Hyper-V / VBS disabled, No antivirus or anticheat running, System meets requirements.
-
-- Failed to load map memory
-Ask if the user has at least 16GB RAM. If yes, tell them to disable every startup app.
-`;
-
-// ─── DISCORD + GEMINI SETUP ───────────────────────────────────────────────────
-
-const discord = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-});
-
-const groq = new Groq({ apiKey: GROQ_API_KEY });
-
-// Cache Exodus website content
-let exodusCache = { content: null, fetchedAt: null };
-const CACHE_TTL_MS = 30 * 60 * 1000;
-
-async function fetchExodus() {
-  const now = Date.now();
-  if (exodusCache.content && (now - exodusCache.fetchedAt) < CACHE_TTL_MS) {
-    return exodusCache.content;
-  }
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+function loadFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
   try {
-    console.log("🌐 Fetching Exodus guide from website...");
-    const res = await fetch(EXODUS_URL);
-    const html = await res.text();
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 20000);
-    exodusCache = { content: text, fetchedAt: now };
-    console.log("✅ Exodus guide fetched successfully");
-    return text;
-  } catch (err) {
-    console.error("❌ Failed to fetch Exodus guide:", err.message);
-    return "Exodus product guide could not be loaded. Please let the customer know a human agent will assist them.";
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return {};
   }
 }
 
-function detectProduct(text) {
-  const lower = text.toLowerCase();
-  if (lower.includes("exodus")) return "exodus";
-  if (lower.includes("crusader")) return "crusader";
-  if (lower.includes("vega")) return "vega";
-  return null;
+function saveFile(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-async function buildSystemPrompt(product) {
-  let knowledgeSection = "";
-
-  if (product === "exodus") {
-    const content = await fetchExodus();
-    knowledgeSection = `EXODUS PRODUCT GUIDE (fetched from website):\n${content}`;
-  } else if (product === "crusader") {
-    knowledgeSection = `CRUSADER PRODUCT GUIDE:\n${CRUSADER_KNOWLEDGE}`;
-  } else if (product === "vega") {
-    knowledgeSection = `VEGA PRODUCT GUIDE:\n${VEGA_KNOWLEDGE}`;
-  } else {
-    const exodusContent = await fetchExodus();
-    knowledgeSection = `
-EXODUS PRODUCT GUIDE (fetched from website):
-${exodusContent}
-
-CRUSADER PRODUCT GUIDE:
-${CRUSADER_KNOWLEDGE}
-
-VEGA PRODUCT GUIDE:
-${VEGA_KNOWLEDGE}
-    `;
-  }
-
-  return `You are a friendly and professional customer support agent for a software/product store.
-Answer the customer's question using ONLY the product guide below.
-- Be concise and clear.
-- If the answer isn't in the guide, say you don't have that information and let them know a human agent will follow up.
-- Always greet the customer warmly in your first message.
-- Use Discord markdown for formatting when helpful (bold, bullet points).
-- If the customer mentions a specific product (Exodus, Crusader, or Vega), focus on that product's guide.
-
-${knowledgeSection}`;
-}
-
-function isOwnerUnavailable() {
+// ─── AVAILABILITY ─────────────────────────────────────────────────────────────
+function isOwnerOnline() {
   const hour = parseInt(
     new Intl.DateTimeFormat("en-GB", {
       timeZone: "Europe/Athens",
@@ -163,125 +37,294 @@ function isOwnerUnavailable() {
     }).format(new Date()),
     10
   );
-  return hour >= 0 && hour < 10;
+  return hour >= 10 && hour < 24;
 }
 
-const UNAVAILABLE_MSG =
-  "⚠️ The owner is not available right now. I can support you as well as the mods, however for further technical support you will have to wait.";
+// ─── DISCORD CLIENT ───────────────────────────────────────────────────────────
+const discord = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
 
 function isTicketChannel(channel) {
   if (channel.type !== ChannelType.GuildText) return false;
   if (!channel.name.startsWith(TICKET_CHANNEL_PREFIX)) return false;
-
-  // Log the parent category so you can verify it matches
-  console.log(`📂 Channel parent category: "${channel.parent?.name}"`);
-
-  // Only enforce category check if TICKET_CATEGORY_NAME is set
   if (
     TICKET_CATEGORY_NAME &&
     channel.parent?.name?.toLowerCase() !== TICKET_CATEGORY_NAME.toLowerCase()
-  ) {
-    console.log(`⚠️  Skipping #${channel.name} — category doesn't match. Expected: "${TICKET_CATEGORY_NAME}", Got: "${channel.parent?.name}"`);
-    return false;
-  }
-
+  ) return false;
   return true;
 }
 
-async function askGroq(systemPrompt, history, newMessage, retries = 3) {
-  const messages = [
-    { role: "system", content: systemPrompt },
-    ...history.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-    { role: "user", content: newMessage },
-  ];
-  for (let i = 0; i < retries; i++) {
-    try {
-      const result = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
-        messages,
-        max_tokens: 1000,
-      });
-      return result.choices[0].message.content;
-    } catch (err) {
-      if (i === retries - 1) throw err;
-      console.log(`Groq attempt ${i + 1} failed, retrying...`);
-      await new Promise(r => setTimeout(r, 2000));
-    }
-  }
+function isAdmin(member) {
+  return (
+    member.permissions.has(PermissionFlagsBits.Administrator) ||
+    member.roles.cache.some((r) => r.name === ADMIN_ROLE_NAME)
+  );
 }
 
-// ─── EVENTS ───────────────────────────────────────────────────────────────────
-
-const WELCOME_MSG =
-  "👋 Hey! Welcome to support. Please describe your issue and mention which product you're using (**Exodus**, **Crusader**, or **Vega**) and I'll help you right away!";
-
+// ─── TICKET WELCOME ───────────────────────────────────────────────────────────
 discord.on("channelCreate", async (channel) => {
   try {
     if (!isTicketChannel(channel)) return;
-    console.log(`🎫 New ticket channel: #${channel.name}`);
+    console.log(`🎫 New ticket: #${channel.name}`);
 
-    // Wait for Ticket King to finish setting up the channel
     await new Promise((r) => setTimeout(r, 2000));
 
-    if (isOwnerUnavailable()) {
-      await channel.send(UNAVAILABLE_MSG);
-    }
+    const online = isOwnerOnline();
+    const guides = loadFile(GUIDES_FILE);
+    const helps = loadFile(HELP_FILE);
+    const allProducts = [...new Set([...Object.keys(guides), ...Object.keys(helps)])];
+    const productList = allProducts.length > 0
+      ? allProducts.map((p) => `• **${p}**`).join("\n")
+      : "• Exodus\n• Crusader\n• Vega";
 
-    await channel.send(WELCOME_MSG);
-    console.log(`✉️  Welcomed #${channel.name}`);
+    const embed = new EmbedBuilder()
+      .setTitle("👋 Welcome to Support")
+      .setColor(online ? 0x00ff88 : 0xff4444)
+      .setDescription(
+        online
+          ? "The owner is **online** and will assist you shortly.\n\nIn the meantime, feel free to ping a **moderator** or use the commands below."
+          : "The owner is currently **offline**. Please ping a **moderator** or use the commands below while you wait."
+      )
+      .addFields(
+        {
+          name: "📚 Guide Commands",
+          value: `Use \`/guide <product>\` for setup guides:\n${productList}`,
+        },
+        {
+          name: "🆘 Help Commands",
+          value: `Use \`/help <product>\` for troubleshooting:\n${productList}`,
+        }
+      )
+      .setFooter({ text: "Please describe your issue and we'll get back to you ASAP." });
+
+    await channel.send({ embeds: [embed] });
   } catch (err) {
     console.error("Error handling ticket channel:", err);
   }
 });
 
-discord.on("messageCreate", async (message) => {
-  try {
-    if (message.author.bot) return;
-    if (!isTicketChannel(message.channel)) return;
-
-    const channel = message.channel;
-    console.log(`💬 Follow-up in #${channel.name}: ${message.content}`);
-
-    const history = await channel.messages.fetch({ limit: 20 });
-    const sorted = [...history.values()].reverse();
-
-    const fullText = sorted.map((m) => m.content).join(" ");
-    const product = detectProduct(fullText);
-    const systemPrompt = await buildSystemPrompt(product);
-
-    const chatHistory = sorted
-      .slice(0, -1)
-      .filter((m) => m.content.trim())
-      .map((m) => ({
-        role: m.author.id === discord.user.id ? "assistant" : "user",
-        content: m.content,
-      }))
-      .filter((_, i, arr) => {
-        // Ensure history starts with a user message
-        const firstUserIdx = arr.findIndex(m => m.role === "user");
-        return i >= firstUserIdx;
-      });
-
-    await channel.sendTyping();
-    const reply = await askGroq(systemPrompt, chatHistory, message.content);
-    await channel.send(reply);
-  } catch (err) {
-    console.error("Error handling follow-up message:", err);
-    await message.channel.send("❌ Something went wrong: " + err.message);
-  }
-});
-
+// ─── SLASH COMMANDS ───────────────────────────────────────────────────────────
 discord.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
+
+  // /ping — admin only
   if (interaction.commandName === "ping") {
-    await interaction.reply("Pong! 🏓");
+    if (!isAdmin(interaction.member)) {
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      return;
+    }
+    await interaction.reply({ content: "Pong! 🏓", ephemeral: true });
+  }
+
+  // ── GUIDE COMMANDS ──────────────────────────────────────────────────────────
+
+  if (interaction.commandName === "guide") {
+    const product = interaction.options.getString("product").toLowerCase();
+    const guides = loadFile(GUIDES_FILE);
+
+    if (!guides[product]) {
+      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: true });
+      return;
+    }
+
+    const g = guides[product];
+    const embed = new EmbedBuilder()
+      .setTitle(g.title || `📖 ${product} — Setup Guide`)
+      .setColor(g.color || 0x00ffff)
+      .setDescription(g.content)
+      .setFooter({ text: "If your issue persists, ping a moderator." });
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  if (interaction.commandName === "guidecreate") {
+    if (!isAdmin(interaction.member)) {
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      return;
+    }
+
+    const product = interaction.options.getString("product").toLowerCase();
+    const title = interaction.options.getString("title");
+    const content = interaction.options.getString("content");
+    const colorHex = interaction.options.getString("color") || "#00ffff";
+    const color = parseInt(colorHex.replace("#", ""), 16) || 0x00ffff;
+
+    const guides = loadFile(GUIDES_FILE);
+    guides[product] = { title, content, color };
+    saveFile(GUIDES_FILE, guides);
+
+    const embed = new EmbedBuilder()
+      .setTitle(`✅ Guide saved for **${product}**`)
+      .setColor(0x00ff88)
+      .addFields(
+        { name: "Product", value: product },
+        { name: "Title", value: title },
+        { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
+      );
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    console.log(`📝 Guide saved for: ${product}`);
+  }
+
+  if (interaction.commandName === "guidelist") {
+    const guides = loadFile(GUIDES_FILE);
+    const list = Object.keys(guides);
+
+    if (list.length === 0) {
+      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: true });
+      return;
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle("📚 Saved Guides")
+      .setColor(0x00ffff)
+      .setDescription(list.map((p) => `• **${p}** — ${guides[p].title}`).join("\n"));
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  // ── HELP COMMANDS ───────────────────────────────────────────────────────────
+
+  if (interaction.commandName === "help") {
+    const product = interaction.options.getString("product").toLowerCase();
+    const helps = loadFile(HELP_FILE);
+
+    if (!helps[product]) {
+      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: true });
+      return;
+    }
+
+    const h = helps[product];
+    const embed = new EmbedBuilder()
+      .setTitle(h.title || `🆘 ${product} — Troubleshooting`)
+      .setColor(h.color || 0xff4444)
+      .setDescription(h.content)
+      .setFooter({ text: "If your issue persists, ping a moderator." });
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  if (interaction.commandName === "helpcreate") {
+    if (!isAdmin(interaction.member)) {
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      return;
+    }
+
+    const product = interaction.options.getString("product").toLowerCase();
+    const title = interaction.options.getString("title");
+    const content = interaction.options.getString("content");
+    const colorHex = interaction.options.getString("color") || "#ff4444";
+    const color = parseInt(colorHex.replace("#", ""), 16) || 0xff4444;
+
+    const helps = loadFile(HELP_FILE);
+    helps[product] = { title, content, color };
+    saveFile(HELP_FILE, helps);
+
+    const embed = new EmbedBuilder()
+      .setTitle(`✅ Help saved for **${product}**`)
+      .setColor(0x00ff88)
+      .addFields(
+        { name: "Product", value: product },
+        { name: "Title", value: title },
+        { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
+      );
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    console.log(`🆘 Help saved for: ${product}`);
+  }
+
+  if (interaction.commandName === "helplist") {
+    const helps = loadFile(HELP_FILE);
+    const list = Object.keys(helps);
+
+    if (list.length === 0) {
+      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: true });
+      return;
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle("🆘 Saved Help Entries")
+      .setColor(0xff4444)
+      .setDescription(list.map((p) => `• **${p}** — ${helps[p].title}`).join("\n"));
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
   }
 });
 
+// ─── REGISTER COMMANDS ────────────────────────────────────────────────────────
 discord.once("clientReady", async (client) => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
-  fetchExodus();
-  await client.application.commands.create({ name: "ping", description: "Pong!" });
+
+  const commands = [
+    new SlashCommandBuilder()
+      .setName("ping")
+      .setDescription("Check if bot is alive (admin only)"),
+
+    new SlashCommandBuilder()
+      .setName("guide")
+      .setDescription("Get a setup guide for a product")
+      .addStringOption((opt) =>
+        opt.setName("product").setDescription("Which product?").setRequired(true)
+      ),
+
+    new SlashCommandBuilder()
+      .setName("guidecreate")
+      .setDescription("Create or update a setup guide (admin only)")
+      .addStringOption((opt) =>
+        opt.setName("product").setDescription("Product name (e.g. exodus)").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("title").setDescription("Guide title").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("content").setDescription("Full guide content").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("color").setDescription("Embed color as hex (e.g. #00ffff)").setRequired(false)
+      ),
+
+    new SlashCommandBuilder()
+      .setName("guidelist")
+      .setDescription("List all saved setup guides"),
+
+    new SlashCommandBuilder()
+      .setName("help")
+      .setDescription("Get a troubleshooting guide for a product")
+      .addStringOption((opt) =>
+        opt.setName("product").setDescription("Which product?").setRequired(true)
+      ),
+
+    new SlashCommandBuilder()
+      .setName("helpcreate")
+      .setDescription("Create or update a troubleshooting guide (admin only)")
+      .addStringOption((opt) =>
+        opt.setName("product").setDescription("Product name (e.g. exodus)").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("title").setDescription("Help title").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("content").setDescription("Full help content").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("color").setDescription("Embed color as hex (e.g. #ff4444)").setRequired(false)
+      ),
+
+    new SlashCommandBuilder()
+      .setName("helplist")
+      .setDescription("List all saved troubleshooting guides"),
+  ];
+
+  const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
+  await rest.put(Routes.applicationCommands(CLIENT_ID), {
+    body: commands.map((c) => c.toJSON()),
+  });
+  console.log("✅ Slash commands registered");
 });
 
 discord.login(DISCORD_TOKEN);
