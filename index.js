@@ -11,6 +11,8 @@ const ADMIN_ROLE_NAME = process.env.ADMIN_ROLE || "Admin";
 const TICKET_CHANNEL_PREFIX = "ticket-";
 const TICKET_CATEGORY_NAME = "╭ tickets ╮";
 const REVIEW_CHANNEL_ID = "1518902652380123238";
+const HONEYPOT_CHANNEL_ID = "1516174575082410115";
+const SERVER_INVITE = "https://discord.gg/m0gged";
 
 // Map to track who opened each ticket: channelId -> { userId, channelName }
 const ticketOpeners = new Map();
@@ -137,10 +139,10 @@ discord.on("interactionCreate", async (interaction) => {
   // /ping — admin only
   if (interaction.commandName === "ping") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
       return;
     }
-    await interaction.reply({ content: "Pong! 🏓", ephemeral: true });
+    await interaction.reply({ content: "Pong! 🏓", ephemeral: false });
   }
 
   // ── GUIDE COMMANDS ──────────────────────────────────────────────────────────
@@ -150,7 +152,7 @@ discord.on("interactionCreate", async (interaction) => {
     const guides = loadFile(GUIDES_FILE);
 
     if (!guides[product]) {
-      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: true });
+      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: false });
       return;
     }
 
@@ -166,7 +168,7 @@ discord.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "guidecreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
       return;
     }
 
@@ -189,7 +191,7 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
     console.log(`📝 Guide saved for: ${product}`);
   }
 
@@ -198,7 +200,7 @@ discord.on("interactionCreate", async (interaction) => {
     const list = Object.keys(guides);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: true });
+      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: false });
       return;
     }
 
@@ -207,7 +209,7 @@ discord.on("interactionCreate", async (interaction) => {
       .setColor(0x00ffff)
       .setDescription(list.map((p) => `• **${p}** — ${guides[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
   }
 
   // ── HELP COMMANDS ───────────────────────────────────────────────────────────
@@ -217,7 +219,7 @@ discord.on("interactionCreate", async (interaction) => {
     const helps = loadFile(HELP_FILE);
 
     if (!helps[product]) {
-      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: true });
+      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: false });
       return;
     }
 
@@ -233,7 +235,7 @@ discord.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "helpcreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: true });
+      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
       return;
     }
 
@@ -256,7 +258,7 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
     console.log(`🆘 Help saved for: ${product}`);
   }
 
@@ -265,7 +267,7 @@ discord.on("interactionCreate", async (interaction) => {
     const list = Object.keys(helps);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: true });
+      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: false });
       return;
     }
 
@@ -274,7 +276,7 @@ discord.on("interactionCreate", async (interaction) => {
       .setColor(0xff4444)
       .setDescription(list.map((p) => `• **${p}** — ${helps[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], ephemeral: false });
   }
 });
 
@@ -351,6 +353,24 @@ discord.on("messageCreate", async (message) => {
     // Save rating and ask for comment
     pendingReviews.set(message.author.id, { channelName, rating, awaitingComment: true, timestamp: Date.now() });
     await message.reply("Got it! Would you like to leave a comment? Type it below or reply with **skip** to finish. 💬");
+  }
+
+  // HONEYPOT: Kick anyone who messages in the honeypot channel and DM them
+  if (!message.author.bot && message.channelId === HONEYPOT_CHANNEL_ID) {
+    try {
+      const member = await message.guild.members.fetch(message.author.id);
+      
+      // Send DM first before kicking
+      await message.author.send(
+        `🪤 **Honeypot Alert!**\n\nYou've triggered our honeypot channel. This is a security measure to catch hacked or scam accounts.\n\nIf you believe this is a mistake, you can rejoin here: ${SERVER_INVITE}\n\nStay safe! 🛡️`
+      );
+
+      // Kick the user
+      await member.kick("Honeypot triggered");
+      console.log(`🪤 User ${message.author.tag} kicked from honeypot and DMed`);
+    } catch (err) {
+      console.error("Error handling honeypot:", err.message);
+    }
   }
 });
 
