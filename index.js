@@ -120,7 +120,7 @@ discord.on("channelCreate", async (channel) => {
     const online = isOwnerOnline();
     const guides = loadFile(GUIDES_FILE);
     const loaders = loadFile(LOADER_FILE);
-    const allProducts = [...new Set([...Object.keys(guides), ...Object.keys(helps)])];
+    const allProducts = [...new Set([...Object.keys(guides), ...Object.keys(loaders)])];
     const productList = allProducts.length > 0
       ? allProducts.map((p) => `• **${p}**`).join("\n")
       : "• Exodus\n• Crusader\n• Vega";
@@ -293,7 +293,7 @@ discord.on("interactionCreate", async (interaction) => {
     const embed = new EmbedBuilder()
       .setTitle("📦 Loader Instructions Saved")
       .setColor(0xaa00ff)
-      .setDescription(list.map((p) => `• **${p}** — ${helps[p].title}`).join("\n"));
+      .setDescription(list.map((p) => `• **${p}** — ${loaders[p].title}`).join("\n"));
 
     await interaction.reply({ embeds: [embed] });
   }
