@@ -13,11 +13,13 @@ const TICKET_CATEGORY_NAME = "╭ tickets ╮";
 const REVIEW_CHANNEL_ID = "1518902652380123238";
 const HONEYPOT_CHANNEL_ID = "1516174575082410115";
 const SERVER_INVITE = "https://discord.gg/m0gged";
+const BANNED_USERNAME_WORDS = ["bio", "server in bio"];
+const INAPPROPRIATE_USERNAME = "inappropriate username";
 
 // Map to track who opened each ticket: channelId -> { userId, channelName }
 const ticketOpeners = new Map();
 const GUIDES_FILE = path.join(__dirname, "guides.json");
-const HELP_FILE = path.join(__dirname, "help.json");
+const LOADER_FILE = path.join(__dirname, "loader.json");
 
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
 function loadFile(filePath) {
@@ -73,7 +75,24 @@ function isAdmin(member) {
   );
 }
 
-// ─── TICKET WELCOME ───────────────────────────────────────────────────────────
+function hasInappropriateUsername(username) {
+  // Check for banned words
+  const lowerUsername = username.toLowerCase();
+  if (BANNED_USERNAME_WORDS.some((word) => lowerUsername.includes(word))) {
+    return true;
+  }
+
+  // Check for special characters that sort to top (Unicode symbols, etc)
+  // Allow: letters, numbers, spaces, common punctuation (-, _, .)
+  const appropriateChars = /^[a-zA-Z0-9\s\-_\.]+$/;
+  if (!appropriateChars.test(username)) {
+    return true;
+  }
+
+  return false;
+}
+
+// ─── TICKET MESSAGE ───────────────────────────────────────────────────────────
 discord.on("channelCreate", async (channel) => {
   try {
     if (!isTicketChannel(channel)) return;
@@ -100,7 +119,7 @@ discord.on("channelCreate", async (channel) => {
 
     const online = isOwnerOnline();
     const guides = loadFile(GUIDES_FILE);
-    const helps = loadFile(HELP_FILE);
+    const loaders = loadFile(LOADER_FILE);
     const allProducts = [...new Set([...Object.keys(guides), ...Object.keys(helps)])];
     const productList = allProducts.length > 0
       ? allProducts.map((p) => `• **${p}**`).join("\n")
@@ -108,11 +127,11 @@ discord.on("channelCreate", async (channel) => {
 
     const embed = new EmbedBuilder()
       .setTitle("👋 Welcome to Support")
-      .setColor(online ? 0x00ff88 : 0xff4444)
+      .setColor(online ? 0x00ff88 : 0xaa00ff)
       .setDescription(
         online
-          ? "The owner is **online** and will assist you shortly.\n\nIn the meantime, feel free to ping a **moderator** or use the commands below."
-          : "The owner is currently **offline**. Please ping a **moderator** or use the commands below while you wait."
+          ? "The owner is **online** and will assist you shortly.\n\nIn the meantime, feel free to ping a **moderator** or use the commands below, if u have a cheet related issue or question."
+          : "The owner is currently **offline**. Please ping a **moderator** or use the commands below while you wait, if u have a cheet related issue or question."
       )
       .addFields(
         {
@@ -120,8 +139,8 @@ discord.on("channelCreate", async (channel) => {
           value: `Use \`/guide <product>\` for setup guides:\n${productList}`,
         },
         {
-          name: "🆘 Help Commands",
-          value: `Use \`/help <product>\` for troubleshooting:\n${productList}`,
+          name: "🆘 Loader Commands",
+          value: `Use \`/loader <product>\` for troubleshooting:\n${productList}`,
         }
       )
       .setFooter({ text: "Please describe your issue and we'll get back to you ASAP." });
@@ -139,10 +158,10 @@ discord.on("interactionCreate", async (interaction) => {
   // /ping — admin only
   if (interaction.commandName === "ping") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
+      await interaction.reply({ content: "❌ You don't have permission to use this command." });
       return;
     }
-    await interaction.reply({ content: "Pong! 🏓", ephemeral: false });
+    await interaction.reply({ content: "Pong! 🏓" });
   }
 
   // ── GUIDE COMMANDS ──────────────────────────────────────────────────────────
@@ -152,7 +171,7 @@ discord.on("interactionCreate", async (interaction) => {
     const guides = loadFile(GUIDES_FILE);
 
     if (!guides[product]) {
-      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.`, ephemeral: false });
+      await interaction.reply({ content: `❌ No guide found for **${product}**. An admin can create one with \`/guidecreate\`.` });
       return;
     }
 
@@ -168,7 +187,7 @@ discord.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "guidecreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
+      await interaction.reply({ content: "❌ You don't have permission to use this command." });
       return;
     }
 
@@ -191,7 +210,7 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed] });
     console.log(`📝 Guide saved for: ${product}`);
   }
 
@@ -200,7 +219,7 @@ discord.on("interactionCreate", async (interaction) => {
     const list = Object.keys(guides);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one.", ephemeral: false });
+      await interaction.reply({ content: "No guides saved yet. Use `/guidecreate` to add one." });
       return;
     }
 
@@ -209,33 +228,33 @@ discord.on("interactionCreate", async (interaction) => {
       .setColor(0x00ffff)
       .setDescription(list.map((p) => `• **${p}** — ${guides[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed] });
   }
 
   // ── HELP COMMANDS ───────────────────────────────────────────────────────────
 
-  if (interaction.commandName === "help") {
+  if (interaction.commandName === "loader") {
     const product = interaction.options.getString("product").toLowerCase();
-    const helps = loadFile(HELP_FILE);
+    const loaders = loadFile(LOADER_FILE);
 
-    if (!helps[product]) {
-      await interaction.reply({ content: `❌ No help found for **${product}**. An admin can create one with \`/helpcreate\`.`, ephemeral: false });
+    if (!loaders[product]) {
+      await interaction.reply({ content: `❌ No loader found for **${product}**. An admin can create one with \`/loadercreate\`.` });
       return;
     }
 
-    const h = helps[product];
+    const h = loaders[product];
     const embed = new EmbedBuilder()
       .setTitle(h.title || `🆘 ${product} — Troubleshooting`)
-      .setColor(h.color || 0xff4444)
+      .setColor(h.color || 0xaa00ff)
       .setDescription(h.content)
       .setFooter({ text: "If your issue persists, ping a moderator." });
 
     await interaction.reply({ embeds: [embed] });
   }
 
-  if (interaction.commandName === "helpcreate") {
+  if (interaction.commandName === "loadercreate") {
     if (!isAdmin(interaction.member)) {
-      await interaction.reply({ content: "❌ You don't have permission to use this command.", ephemeral: false });
+      await interaction.reply({ content: "❌ You don't have permission to use this command." });
       return;
     }
 
@@ -243,11 +262,11 @@ discord.on("interactionCreate", async (interaction) => {
     const title = interaction.options.getString("title");
     const content = interaction.options.getString("content");
     const colorHex = interaction.options.getString("color") || "#ff4444";
-    const color = parseInt(colorHex.replace("#", ""), 16) || 0xff4444;
+    const color = parseInt(colorHex.replace("#", ""), 16) || 0xaa00ff;
 
-    const helps = loadFile(HELP_FILE);
-    helps[product] = { title, content, color };
-    saveFile(HELP_FILE, helps);
+    const loaders = loadFile(LOADER_FILE);
+    loaders[product] = { title, content, color };
+    saveFile(LOADER_FILE, loaders);
 
     const embed = new EmbedBuilder()
       .setTitle(`✅ Help saved for **${product}**`)
@@ -258,25 +277,41 @@ discord.on("interactionCreate", async (interaction) => {
         { name: "Content Preview", value: content.slice(0, 200) + (content.length > 200 ? "..." : "") }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
-    console.log(`🆘 Help saved for: ${product}`);
+    await interaction.reply({ embeds: [embed] });
+    console.log(`🆘 Loader saved for: ${product}`);
   }
 
-  if (interaction.commandName === "helplist") {
-    const helps = loadFile(HELP_FILE);
+  if (interaction.commandName === "loaderlist") {
+    const loaders = loadFile(LOADER_FILE);
     const list = Object.keys(helps);
 
     if (list.length === 0) {
-      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one.", ephemeral: false });
+      await interaction.reply({ content: "No help entries saved yet. Use `/helpcreate` to add one." });
       return;
     }
 
     const embed = new EmbedBuilder()
-      .setTitle("🆘 Saved Help Entries")
-      .setColor(0xff4444)
+      .setTitle("📦 Loader Instructions Saved")
+      .setColor(0xaa00ff)
       .setDescription(list.map((p) => `• **${p}** — ${helps[p].title}`).join("\n"));
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+    await interaction.reply({ embeds: [embed] });
+  }
+});
+
+// ─── USERNAME FILTER ────────────────────────────────────────────────────────────
+discord.on("guildMemberUpdate", async (oldMember, newMember) => {
+  if (oldMember.nickname === newMember.nickname) return;
+  if (newMember.user.bot) return;
+
+  const nickname = newMember.nickname || newMember.user.username;
+  if (hasInappropriateUsername(nickname)) {
+    try {
+      await newMember.setNickname(INAPPROPRIATE_USERNAME);
+      console.log(`🚫 Renamed ${newMember.user.tag} to "${INAPPROPRIATE_USERNAME}"`);
+    } catch (err) {
+      console.error("Could not rename user:", err.message);
+    }
   }
 });
 
@@ -320,7 +355,7 @@ discord.on("messageCreate", async (message) => {
 
       const embed = new EmbedBuilder()
         .setTitle("📝 New Support Review")
-        .setColor(savedRating >= 4 ? 0x00ff88 : savedRating === 3 ? 0xffaa00 : 0xff4444)
+        .setColor(savedRating >= 4 ? 0x00ff88 : savedRating === 3 ? 0xffaa00 : 0xaa00ff)
         .addFields(
           { name: "User", value: `<@${message.author.id}>`, inline: true },
           { name: "Ticket", value: `#${channelName}`, inline: true },
@@ -411,15 +446,15 @@ discord.once("clientReady", async (client) => {
       .setDescription("List all saved setup guides"),
 
     new SlashCommandBuilder()
-      .setName("help")
-      .setDescription("Get a troubleshooting guide for a product")
+      .setName("loader")
+      .setDescription("Get loader instructions for a product")
       .addStringOption((opt) =>
         opt.setName("product").setDescription("Which product?").setRequired(true)
       ),
 
     new SlashCommandBuilder()
-      .setName("helpcreate")
-      .setDescription("Create or update a troubleshooting guide (admin only)")
+      .setName("loadercreate")
+      .setDescription("Create or update loader instructions (admin only)")
       .addStringOption((opt) =>
         opt.setName("product").setDescription("Product name (e.g. exodus)").setRequired(true)
       )
@@ -434,8 +469,8 @@ discord.once("clientReady", async (client) => {
       ),
 
     new SlashCommandBuilder()
-      .setName("helplist")
-      .setDescription("List all saved troubleshooting guides"),
+      .setName("loaderlist")
+      .setDescription("List all saved loader instructions"),
   ];
 
   const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
